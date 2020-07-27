@@ -103,7 +103,9 @@ class D1(threading.Thread):
             self.semaphore.acquire()
             try:
                 self.serial.write(cammand.encode())
-                self.output_queue.put(self.serial.read_until("\r").decode())
+                output = self.serial.read_until("\r").decode()
+                if output != "":
+                    self.output_queue.put(output)
             except:
                 print("execute exception")
                 self.output_queue.put("10 10 10 10")
@@ -123,42 +125,45 @@ def main():
 
     # 樹莓派
     # s = D1("/dev/ttyUSB0", 115200)
+    
+    try:
+        while True:
+            time.sleep(s.waiting_time)
+            data = s.ping()
 
-    while True:
-        time.sleep(s.waiting_time)
-        data = s.ping()
+            obstacle = False
+            for i in range(3):
+                if 0 < data[i] < 20:
+                    obstacle = True
+                    break
 
-        obstacle = False
-        for i in range(3):
-            if 0 < data[i] < 20:
-                obstacle = True
-                break
+            if obstacle:
+                # 後退
+                distance = data[3] if data[3] != 0 else 100
+                t2 = threading.Thread(target=s.backward, args=(10,))
+                t2.start()
+                t2.join(s.second(distance))
+                s.stop_event.set()
+                
+                # 轉向
+                t3 = threading.Thread(target=s.spin, args=(10,True))
+                t3.start()
+                t3.join(3)
+                s.stop_event.set()
 
-        if obstacle:
-            # 後退
-            distance = data[3] if data[3] != 0 else 100
-            t2 = threading.Thread(target=s.backward, args=(10,))
-            t2.start()
-            t2.join(s.second(distance))
-            s.stop_event.set()
-            
-            # 轉向
-            t3 = threading.Thread(target=s.spin, args=(10,True))
-            t3.start()
-            t3.join(3)
-            s.stop_event.set()
+            else:
+                # 前進
+                distance = min(data[i] for i in range(3) if data[i] > 0)
+                t4 = threading.Thread(target=s.forward, args=(10,))
+                t4.start()
+                t4.join(s.second(distance))
+                s.stop_event.set()
 
-        else:
-            # 前進
-            distance = min(data[i] for i in range(3) if data[i] > 0)
-            t4 = threading.Thread(target=s.forward, args=(10,))
-            t4.start()
-            t4.join(s.second(distance))
-            s.stop_event.set()
-
-        while not s.input_queue.empty():
-            s.input_queue.get()
-        print("next")
+            while not s.input_queue.empty():
+                s.input_queue.get()
+            print("next")
+    except KeyboardInterrupt as e:
+        print(e)
 
 if __name__ == '__main__':
     main()
