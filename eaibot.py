@@ -16,7 +16,7 @@ class D1(threading.Thread):
             print("Cannot connect device " + com_port)
             exit(1)
 
-        self.waiting_time = 0.4
+        self.waiting_time = 0.5
         self.command_waiting_time = 0.5
         self.serial.timeout = 0.5
         self.serial.writeTimeout = 0.5
@@ -71,6 +71,7 @@ class D1(threading.Thread):
         while not self.stop_event.wait(0):
             s = "z -%s -%s\r" % (speed, speed)
             self.input_queue.put(s)
+            time.sleep(self.command_waiting_time)
         self.pause()
 
     # 左轉
@@ -95,7 +96,10 @@ class D1(threading.Thread):
             pass
 
     def second(self, distance):
-        return distance / self.speed / 100 / 2
+        if distance < 100:
+            return distance / self.speed / 100 - 0.5
+        else:
+            return distance / self.speed / 100 / 2
 
     def execute(self):
         while True:
@@ -119,13 +123,17 @@ class D1(threading.Thread):
         print(data)
         return data
 
+    def clear(self):
+        while not self.input_queue.empty():
+            self.input_queue.get()
+        self.pause()
 def main():
     # 電腦
     s = D1("COM3", 115200)
 
     # 樹莓派
     # s = D1("/dev/ttyUSB0", 115200)
-    
+
     try:
         while True:
             time.sleep(s.waiting_time)
@@ -133,7 +141,7 @@ def main():
 
             obstacle = False
             for i in range(3):
-                if 0 < data[i] < 20:
+                if 0 < data[i] < 35:
                     obstacle = True
                     break
 
@@ -144,7 +152,10 @@ def main():
                 t2.start()
                 t2.join(s.second(distance))
                 s.stop_event.set()
-                
+
+                s.clear()
+                time.sleep(s.waiting_time)
+
                 # 轉向
                 t3 = threading.Thread(target=s.spin, args=(10,True))
                 t3.start()
@@ -159,11 +170,11 @@ def main():
                 t4.join(s.second(distance))
                 s.stop_event.set()
 
-            while not s.input_queue.empty():
-                s.input_queue.get()
+            s.clear()
             print("next")
     except KeyboardInterrupt as e:
         print(e)
+        exit(0)
 
 if __name__ == '__main__':
     main()
