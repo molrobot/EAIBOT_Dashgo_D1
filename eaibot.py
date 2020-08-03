@@ -16,13 +16,13 @@ class D1(threading.Thread):
             print("Cannot connect device " + com_port)
             exit(1)
 
-        self.waiting_time = 0.5
+        self.waiting_time = 0.2
         self.command_waiting_time = 0.5
         self.serial.timeout = 0.5
         self.serial.writeTimeout = 0.5
 
         # 每1/30秒產生的編碼器脈衝數
-        self.ticks = 10
+        self.ticks = 15
         # 輪子直徑
         self.wheel_diameter = 0.1260
         # 左右輪間距
@@ -38,38 +38,38 @@ class D1(threading.Thread):
         self.output_queue = Queue()
         self.semaphore = threading.Semaphore(2)
         self.stop_event = threading.Event()
-        t1 = threading.Thread(target=self.execute, args=())
-        t1.start()
+        self.t1 = threading.Thread(target=self.execute, args=())
+        self.t1.start()
 
     # 旋轉
-    def spin(self, speed=5, direction=True):
+    def spin(self, direction=True):
         print("Spinning.")
         self.stop_event.clear()
         while not self.stop_event.wait(0):
             if direction:
-                s = "z %s -%s\r" % (speed, speed)
+                s = "z %s -%s\r" % (self.ticks, self.ticks)
             else:
-                s = "z -%s %s\r" % (speed, speed)
+                s = "z -%s %s\r" % (self.ticks, self.ticks)
             self.input_queue.put(s)
             time.sleep(self.command_waiting_time)
         self.pause()
 
     # 前進
-    def forward(self, speed=5):
+    def forward(self):
         print("Forwarding.")
         self.stop_event.clear()
         while not self.stop_event.wait(0):
-            s = "z %s %s\r" % (speed, speed)
+            s = "z %s %s\r" % (self.ticks, self.ticks)
             self.input_queue.put(s)
             time.sleep(self.command_waiting_time)
         self.pause()
 
     # 後退
-    def backward(self, speed=5):
+    def backward(self):
         print("Backwarding.")
         self.stop_event.clear()
         while not self.stop_event.wait(0):
-            s = "z -%s -%s\r" % (speed, speed)
+            s = "z -%s -%s\r" % (self.ticks, self.ticks)
             self.input_queue.put(s)
             time.sleep(self.command_waiting_time)
         self.pause()
@@ -99,7 +99,7 @@ class D1(threading.Thread):
         if distance < 100:
             return distance / self.speed / 100 - 0.5
         else:
-            return distance / self.speed / 100 / 2
+            return distance / self.speed / 100 - 1
 
     def execute(self):
         while True:
@@ -112,7 +112,7 @@ class D1(threading.Thread):
                     self.output_queue.put(output)
             except:
                 print("execute exception")
-                self.output_queue.put("10 10 10 10")
+                self.output_queue.put("20 20 20 20")
             self.semaphore.release()
 
     # 超音波測距
@@ -147,8 +147,8 @@ def main():
 
             if obstacle:
                 # 後退
-                distance = data[3] if data[3] != 0 else 100
-                t2 = threading.Thread(target=s.backward, args=(10,))
+                distance = data[3] if 0 < data[3] < 50 else 50
+                t2 = threading.Thread(target=s.backward, args=())
                 t2.start()
                 t2.join(s.second(distance))
                 s.stop_event.set()
@@ -157,15 +157,15 @@ def main():
                 time.sleep(s.waiting_time)
 
                 # 轉向
-                t3 = threading.Thread(target=s.spin, args=(10,True))
+                t3 = threading.Thread(target=s.spin, args=(True,))
                 t3.start()
-                t3.join(3)
+                t3.join(1.5)
                 s.stop_event.set()
 
             else:
                 # 前進
                 distance = min(data[i] for i in range(3) if data[i] > 0)
-                t4 = threading.Thread(target=s.forward, args=(10,))
+                t4 = threading.Thread(target=s.forward, args=())
                 t4.start()
                 t4.join(s.second(distance))
                 s.stop_event.set()
